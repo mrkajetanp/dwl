@@ -1320,7 +1320,7 @@ monocle(Monitor *m)
 	wl_list_for_each(c, &clients, link) {
 		if (!VISIBLEON(c, m) || c->isfloating || c->isfullscreen)
 			continue;
-		resize(c, m->w.x, m->w.y, m->w.width, m->w.height, 0);
+		resize(c, m->w.x + gappx, m->w.y + gappx, m->w.width - 2*gappx, m->w.height - 2*gappx, 0);
 	}
 }
 
