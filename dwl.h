@@ -36,6 +36,9 @@
 #include <wlr/xwayland.h>
 #endif
 
+#define GAP_TOGGLE 100
+#define GAP_RESET  0
+
 /* enums */
 enum { CurNormal, CurMove, CurResize }; /* cursor */
 #ifdef XWAYLAND
@@ -147,6 +150,12 @@ typedef struct {
 	void (*arrange)(Monitor *);
 } Layout;
 
+typedef struct {
+  int isgap;
+  int realgap;
+  int gappx;
+} Gap;
+
 struct Monitor {
 	struct wl_list link;
 	struct wlr_output *wlr_output;
@@ -156,6 +165,7 @@ struct Monitor {
 	struct wlr_box w;      /* window area, layout-relative */
 	struct wl_list layers[4]; // LayerSurface::link
 	const Layout *lt[2];
+  Gap *gap;
 	unsigned int seltags;
 	unsigned int sellt;
 	unsigned int tagset[2];
@@ -184,6 +194,8 @@ struct render_data {
 
 static void tile(Monitor *m);
 static void monocle(Monitor *m);
+
+static void setgaps(const Arg *arg);
 
 #endif /* ifndef DWL_H */
 

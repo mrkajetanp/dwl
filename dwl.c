@@ -60,6 +60,7 @@ static Monitor *dirtomon(enum wlr_direction dir);
 static void focusclient(Client *c, int lift);
 static void focusmon(const Arg *arg);
 static void focusstack(const Arg *arg);
+static void gap_copy(Gap *to, const Gap *from);
 static void fullscreennotify(struct wl_listener *listener, void *data);
 static Client *focustop(Monitor *m);
 static void incnmaster(const Arg *arg);
@@ -640,6 +641,8 @@ createmon(struct wl_listener *listener, void *data)
 	for (size_t i = 0; i < LENGTH(m->layers); i++)
 		wl_list_init(&m->layers[i]);
 	m->tagset[0] = m->tagset[1] = 1;
+  m->gap = malloc(sizeof(Gap));
+	gap_copy(m->gap, &default_gap);
 	for (r = monrules; r < END(monrules); r++) {
 		if (!r->name || strstr(wlr_output->name, r->name)) {
 			m->mfact = r->mfact;
@@ -1140,7 +1143,8 @@ monocle(Monitor *m)
 	wl_list_for_each(c, &clients, link) {
 		if (!VISIBLEON(c, m) || c->isfloating || c->isfullscreen)
 			continue;
-		resize(c, m->w.x + gappx, m->w.y + gappx, m->w.width - 2*gappx, m->w.height - 2*gappx, 0);
+		resize(c, m->w.x + m->gap->gappx, m->w.y + m->gap->gappx,
+        m->w.width - 2*m->gap->gappx, m->w.height - 2*m->gap->gappx, 0);
 	}
 }
 
@@ -1697,6 +1701,35 @@ void setfloating(Client *c, int floating)
 	arrange(c->mon);
 }
 
+void gap_copy(Gap *to, const Gap *from)
+{
+	to->isgap   = from->isgap;
+	to->realgap = from->realgap;
+	to->gappx   = from->gappx;
+}
+
+void setgaps(const Arg *arg)
+{
+	Gap *p = selmon->gap;
+	switch(arg->i)
+	{
+		case GAP_TOGGLE:
+			p->isgap = 1 - p->isgap;
+			break;
+		case GAP_RESET:
+			gap_copy(p, &default_gap);
+			break;
+		default:
+			p->realgap += arg->i;
+			p->isgap = 1;
+	}
+
+	p->realgap = MAX(p->realgap, 0);
+	p->gappx = p->realgap * p->isgap;
+	arrange(selmon);
+}
+
+
 void setlayout(const Arg *arg)
 {
 	if (!arg || !arg->v || arg->v != selmon->lt[selmon->sellt])
@@ -1981,23 +2014,23 @@ void tile(Monitor *m)
 	if (n > m->nmaster)
 		mw = m->nmaster ? m->w.width * m->mfact : 0;
 	else
-		mw = m->w.width - gappx;
+		mw = m->w.width - m->gap->gappx;
 
 	i = 0;
-  my = ty = gappx;
+  my = ty = m->gap->gappx;
 
 	wl_list_for_each(c, &clients, link) {
 		if (!VISIBLEON(c, m) || c->isfloating || c->isfullscreen)
 			continue;
 
 		if (i < m->nmaster) {
-			h = (m->w.height - my) / (MIN(n, m->nmaster) - i) - gappx;
-			resize(c, m->w.x + gappx, m->w.y + my, mw - 2*gappx, h, 0);
-			my += c->geom.height + gappx;
+			h = (m->w.height - my) / (MIN(n, m->nmaster) - i) - m->gap->gappx;
+			resize(c, m->w.x + m->gap->gappx, m->w.y + my, mw - 2*m->gap->gappx, h, 0);
+			my += c->geom.height + m->gap->gappx;
 		} else {
-			h = (m->w.height - ty) / (n - i) - gappx;
-			resize(c, m->w.x + mw, m->w.y + ty, m->w.width - mw - gappx, h, 0);
-			ty += c->geom.height + gappx;
+			h = (m->w.height - ty) / (n - i) - m->gap->gappx;
+			resize(c, m->w.x + mw, m->w.y + ty, m->w.width - mw - m->gap->gappx, h, 0);
+			ty += c->geom.height + m->gap->gappx;
 		}
 		i++;
 	}
