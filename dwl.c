@@ -13,40 +13,8 @@
 #include <libinput.h>
 #include <wayland-server-core.h>
 #include <wlr/backend.h>
-#include <wlr/render/wlr_renderer.h>
-#include <wlr/types/wlr_compositor.h>
-#include <wlr/types/wlr_cursor.h>
-#include <wlr/types/wlr_data_control_v1.h>
-#include <wlr/types/wlr_data_device.h>
-#include <wlr/types/wlr_export_dmabuf_v1.h>
-#include <wlr/types/wlr_gamma_control_v1.h>
-#include <wlr/types/wlr_input_device.h>
-#include <wlr/types/wlr_idle.h>
-#include <wlr/types/wlr_layer_shell_v1.h>
-#include <wlr/types/wlr_keyboard.h>
-#include <wlr/types/wlr_matrix.h>
-#include <wlr/types/wlr_output.h>
-#include <wlr/types/wlr_output_layout.h>
-#include <wlr/types/wlr_output_management_v1.h>
-#include <wlr/types/wlr_pointer.h>
-#include <wlr/types/wlr_primary_selection.h>
-#include <wlr/types/wlr_primary_selection_v1.h>
-#include <wlr/types/wlr_screencopy_v1.h>
-#include <wlr/types/wlr_server_decoration.h>
-#include <wlr/types/wlr_seat.h>
-#include <wlr/types/wlr_viewporter.h>
-#include <wlr/types/wlr_virtual_keyboard_v1.h>
-#include <wlr/types/wlr_xcursor_manager.h>
-#include <wlr/types/wlr_xdg_decoration_v1.h>
-#include <wlr/types/wlr_xdg_output_v1.h>
-#include <wlr/types/wlr_xdg_shell.h>
-#include <wlr/backend/libinput.h>
-#include <wlr/util/log.h>
-#include <xkbcommon/xkbcommon.h>
-#ifdef XWAYLAND
-#include <X11/Xlib.h>
-#include <wlr/xwayland.h>
-#endif
+#include "dwl.h"
+
 
 /* macros */
 #define BARF(fmt, ...)		do { fprintf(stderr, fmt "\n", ##__VA_ARGS__); exit(EXIT_FAILURE); } while (0)
@@ -60,151 +28,6 @@
 #define TAGMASK                 ((1 << LENGTH(tags)) - 1)
 #define ROUND(X)                ((int)((X)+0.5))
 #define LISTEN(E, L, H)         wl_signal_add((E), ((L)->notify = (H), (L)))
-
-/* enums */
-enum { CurNormal, CurMove, CurResize }; /* cursor */
-#ifdef XWAYLAND
-enum { NetWMWindowTypeDialog, NetWMWindowTypeSplash, NetWMWindowTypeToolbar,
-	NetWMWindowTypeUtility, NetLast }; /* EWMH atoms */
-enum { XDGShell, X11Managed, X11Unmanaged }; /* client types */
-#endif
-
-typedef union {
-	int i;
-	unsigned int ui;
-	float f;
-	const void *v;
-} Arg;
-
-typedef struct {
-	unsigned int mod;
-	unsigned int button;
-	void (*func)(const Arg *);
-	const Arg arg;
-} Button;
-
-typedef struct Monitor Monitor;
-typedef struct {
-	struct wl_list link;
-	struct wl_list flink;
-	struct wl_list slink;
-	union {
-		struct wlr_xdg_surface *xdg;
-		struct wlr_xwayland_surface *xwayland;
-	} surface;
-	struct wl_listener commit;
-	struct wl_listener map;
-	struct wl_listener unmap;
-	struct wl_listener destroy;
-	struct wl_listener set_title;
-	struct wl_listener fullscreen;
-	struct wlr_box geom;  /* layout-relative, includes border */
-	Monitor *mon;
-#ifdef XWAYLAND
-	unsigned int type;
-	struct wl_listener activate;
-	struct wl_listener configure;
-#endif
-	int bw;
-	unsigned int tags;
-	int isfloating;
-	uint32_t resize; /* configure serial of a pending resize */
-	int prevx;
-	int prevy;
-	int prevwidth;
-	int prevheight;
-	int isfullscreen;
-} Client;
-
-typedef struct {
-	struct wl_listener request_mode;
-	struct wl_listener destroy;
-} Decoration;
-
-typedef struct {
-	uint32_t mod;
-	xkb_keysym_t keysym;
-	void (*func)(const Arg *);
-	const Arg arg;
-} Key;
-
-typedef struct {
-	struct wl_list link;
-	struct wlr_input_device *device;
-
-	struct wl_listener modifiers;
-	struct wl_listener key;
-	struct wl_listener destroy;
-} Keyboard;
-
-typedef struct {
-	struct wlr_layer_surface_v1 *layer_surface;
-	struct wl_list link;
-
-	struct wl_listener destroy;
-	struct wl_listener map;
-	struct wl_listener unmap;
-	struct wl_listener surface_commit;
-
-	struct wlr_box geo;
-	enum zwlr_layer_shell_v1_layer layer;
-} LayerSurface;
-
-typedef struct {
-	uint32_t singular_anchor;
-	uint32_t anchor_triplet;
-	int *positive_axis;
-	int *negative_axis;
-	int margin;
-} Edge;
-
-typedef struct {
-	const char *symbol;
-	void (*arrange)(Monitor *);
-} Layout;
-
-struct Monitor {
-	struct wl_list link;
-	struct wlr_output *wlr_output;
-	struct wl_listener frame;
-	struct wl_listener destroy;
-	struct wlr_box m;      /* monitor area, layout-relative */
-	struct wlr_box w;      /* window area, layout-relative */
-	struct wl_list layers[4]; // LayerSurface::link
-	const Layout *lt[2];
-	unsigned int seltags;
-	unsigned int sellt;
-	unsigned int tagset[2];
-	double mfact;
-	int nmaster;
-};
-
-typedef struct {
-	const char *name;
-	float mfact;
-	int nmaster;
-	float scale;
-	const Layout *lt;
-	enum wl_output_transform rr;
-	int x;
-	int y;
-} MonitorRule;
-
-typedef struct {
-	const char *id;
-	const char *title;
-	unsigned int tags;
-	int isfloating;
-	int monitor;
-} Rule;
-
-/* Used to move all of the data necessary to render a surface from the top-level
- * frame handler to the per-surface render function. */
-struct render_data {
-	struct wlr_output *output;
-	struct timespec *when;
-	int x, y; /* layout-relative */
-};
 
 /* function declarations */
 static void applybounds(Client *c, struct wlr_box *bbox);
@@ -247,7 +70,6 @@ static void keypressmod(struct wl_listener *listener, void *data);
 static void killclient(const Arg *arg);
 static void maplayersurfacenotify(struct wl_listener *listener, void *data);
 static void mapnotify(struct wl_listener *listener, void *data);
-static void monocle(Monitor *m);
 static void motionabsolute(struct wl_listener *listener, void *data);
 static void motionnotify(uint32_t time);
 static void motionrelative(struct wl_listener *listener, void *data);
@@ -280,7 +102,6 @@ static void sigchld(int unused);
 static void spawn(const Arg *arg);
 static void tag(const Arg *arg);
 static void tagmon(const Arg *arg);
-static void tile(Monitor *m);
 static void togglefloating(const Arg *arg);
 static void togglefullscreen(const Arg *arg);
 static void toggletag(const Arg *arg);
@@ -1778,8 +1599,7 @@ resize(Client *c, int x, int y, int w, int h, int interact)
 			c->geom.height - 2 * c->bw);
 }
 
-void
-run(char *startup_cmd)
+void run(char *startup_cmd)
 {
 	pid_t startup_pid = -1;
 
@@ -1838,8 +1658,7 @@ run(char *startup_cmd)
 	}
 }
 
-void
-scalebox(struct wlr_box *box, float scale)
+void scalebox(struct wlr_box *box, float scale)
 {
 	box->width =  ROUND((box->x + box->width) * scale) -  ROUND(box->x * scale);
 	box->height = ROUND((box->y + box->height) * scale) - ROUND(box->y * scale);
@@ -1847,8 +1666,7 @@ scalebox(struct wlr_box *box, float scale)
 	box->y = ROUND(box->y * scale);
 }
 
-Client *
-selclient(void)
+Client *selclient(void)
 {
 	Client *c = wl_container_of(fstack.next, c, flink);
 	if (wl_list_empty(&fstack) || !VISIBLEON(c, selmon))
@@ -1856,8 +1674,7 @@ selclient(void)
 	return c;
 }
 
-void
-setcursor(struct wl_listener *listener, void *data)
+void setcursor(struct wl_listener *listener, void *data)
 {
 	/* This event is raised by the seat when a client provides a cursor image */
 	struct wlr_seat_pointer_request_set_cursor_event *event = data;
@@ -1875,15 +1692,13 @@ setcursor(struct wl_listener *listener, void *data)
 				event->hotspot_x, event->hotspot_y);
 }
 
-void
-setfloating(Client *c, int floating)
+void setfloating(Client *c, int floating)
 {
 	c->isfloating = floating;
 	arrange(c->mon);
 }
 
-void
-setlayout(const Arg *arg)
+void setlayout(const Arg *arg)
 {
 	if (!arg || !arg->v || arg->v != selmon->lt[selmon->sellt])
 		selmon->sellt ^= 1;
@@ -1895,8 +1710,7 @@ setlayout(const Arg *arg)
 }
 
 /* arg > 1.0 will set mfact absolutely */
-void
-setmfact(const Arg *arg)
+void setmfact(const Arg *arg)
 {
 	float f;
 
@@ -1909,8 +1723,7 @@ setmfact(const Arg *arg)
 	arrange(selmon);
 }
 
-void
-setmon(Client *c, Monitor *m, unsigned int newtags)
+void setmon(Client *c, Monitor *m, unsigned int newtags)
 {
 	Monitor *oldmon = c->mon;
 
@@ -1933,8 +1746,7 @@ setmon(Client *c, Monitor *m, unsigned int newtags)
 	focusclient(focustop(selmon), 1);
 }
 
-void
-setpsel(struct wl_listener *listener, void *data)
+void setpsel(struct wl_listener *listener, void *data)
 {
 	/* This event is raised by the seat when a client wants to set the selection,
 	 * usually when the user copies something. wlroots allows compositors to
@@ -1944,8 +1756,7 @@ setpsel(struct wl_listener *listener, void *data)
 	wlr_seat_set_primary_selection(seat, event->source, event->serial);
 }
 
-void
-setsel(struct wl_listener *listener, void *data)
+void setsel(struct wl_listener *listener, void *data)
 {
 	/* This event is raised by the seat when a client wants to set the selection,
 	 * usually when the user copies something. wlroots allows compositors to
@@ -1955,8 +1766,7 @@ setsel(struct wl_listener *listener, void *data)
 	wlr_seat_set_selection(seat, event->source, event->serial);
 }
 
-void
-setup(void)
+void setup(void)
 {
 	/* The Wayland display is managed by libwayland. It handles accepting
 	 * clients from the Unix socket, manging Wayland globals, and so on. */
@@ -2116,8 +1926,7 @@ setup(void)
 #endif
 }
 
-void
-sigchld(int unused)
+void sigchld(int unused)
 {
 	/* We should be able to remove this function in favor of a simple
 	 *     signal(SIGCHLD, SIG_IGN);
@@ -2130,8 +1939,7 @@ sigchld(int unused)
 		;
 }
 
-void
-spawn(const Arg *arg)
+void spawn(const Arg *arg)
 {
 	if (fork() == 0) {
 		dup2(STDERR_FILENO, STDOUT_FILENO);
@@ -2141,8 +1949,7 @@ spawn(const Arg *arg)
 	}
 }
 
-void
-tag(const Arg *arg)
+void tag(const Arg *arg)
 {
 	Client *sel = selclient();
 	if (sel && arg->ui & TAGMASK) {
@@ -2153,8 +1960,7 @@ tag(const Arg *arg)
 	printstatus();
 }
 
-void
-tagmon(const Arg *arg)
+void tagmon(const Arg *arg)
 {
 	Client *sel = selclient();
 	if (!sel)
@@ -2162,8 +1968,7 @@ tagmon(const Arg *arg)
 	setmon(sel, dirtomon(arg->i), 0);
 }
 
-void
-tile(Monitor *m)
+void tile(Monitor *m)
 {
 	unsigned int i, n = 0, h, mw, my, ty;
 	Client *c;
@@ -2177,26 +1982,29 @@ tile(Monitor *m)
 	if (n > m->nmaster)
 		mw = m->nmaster ? m->w.width * m->mfact : 0;
 	else
-		mw = m->w.width;
-	i = my = ty = 0;
+		mw = m->w.width - gappx;
+
+	i = 0;
+  my = ty = gappx;
+
 	wl_list_for_each(c, &clients, link) {
 		if (!VISIBLEON(c, m) || c->isfloating || c->isfullscreen)
 			continue;
+
 		if (i < m->nmaster) {
-			h = (m->w.height - my) / (MIN(n, m->nmaster) - i);
-			resize(c, m->w.x, m->w.y + my, mw, h, 0);
-			my += c->geom.height;
+			h = (m->w.height - my) / (MIN(n, m->nmaster) - i) - gappx;
+			resize(c, m->w.x + gappx, m->w.y + my, mw - 2*gappx, h, 0);
+			my += c->geom.height + gappx;
 		} else {
-			h = (m->w.height - ty) / (n - i);
-			resize(c, m->w.x + mw, m->w.y + ty, m->w.width - mw, h, 0);
-			ty += c->geom.height;
+			h = (m->w.height - ty) / (n - i) - gappx;
+			resize(c, m->w.x + mw, m->w.y + ty, m->w.width - mw - gappx, h, 0);
+			ty += c->geom.height + gappx;
 		}
 		i++;
 	}
 }
 
-void
-togglefloating(const Arg *arg)
+void togglefloating(const Arg *arg)
 {
 	Client *sel = selclient();
 	if (!sel)
@@ -2205,8 +2013,7 @@ togglefloating(const Arg *arg)
 	setfloating(sel, !sel->isfloating /* || sel->isfixed */);
 }
 
-void
-toggletag(const Arg *arg)
+void toggletag(const Arg *arg)
 {
 	unsigned int newtags;
 	Client *sel = selclient();
@@ -2221,8 +2028,7 @@ toggletag(const Arg *arg)
 	printstatus();
 }
 
-void
-toggleview(const Arg *arg)
+void toggleview(const Arg *arg)
 {
 	unsigned int newtagset = selmon->tagset[selmon->seltags] ^ (arg->ui & TAGMASK);
 
@@ -2234,8 +2040,7 @@ toggleview(const Arg *arg)
 	printstatus();
 }
 
-void
-unmaplayersurface(LayerSurface *layersurface)
+void unmaplayersurface(LayerSurface *layersurface)
 {
 	layersurface->layer_surface->mapped = 0;
 	if (layersurface->layer_surface->surface ==
@@ -2244,15 +2049,13 @@ unmaplayersurface(LayerSurface *layersurface)
 	motionnotify(0);
 }
 
-void
-unmaplayersurfacenotify(struct wl_listener *listener, void *data)
+void unmaplayersurfacenotify(struct wl_listener *listener, void *data)
 {
 	LayerSurface *layersurface = wl_container_of(listener, layersurface, unmap);
 	unmaplayersurface(layersurface);
 }
 
-void
-unmapnotify(struct wl_listener *listener, void *data)
+void unmapnotify(struct wl_listener *listener, void *data)
 {
 	/* Called when the surface is unmapped, and should no longer be shown. */
 	Client *c = wl_container_of(listener, c, unmap);
@@ -2265,8 +2068,7 @@ unmapnotify(struct wl_listener *listener, void *data)
 	wl_list_remove(&c->slink);
 }
 
-void
-updatemons(struct wl_listener *listener, void *data)
+void updatemons(struct wl_listener *listener, void *data)
 {
 	/*
 	 * Called whenever the output layout changes: adding or removing a
@@ -2302,16 +2104,14 @@ updatemons(struct wl_listener *listener, void *data)
 	wlr_output_manager_v1_set_configuration(output_mgr, config);
 }
 
-void
-updatetitle(struct wl_listener *listener, void *data)
+void updatetitle(struct wl_listener *listener, void *data)
 {
 	Client *c = wl_container_of(listener, c, set_title);
 	if (c == focustop(c->mon))
 		printstatus();
 }
 
-void
-view(const Arg *arg)
+void view(const Arg *arg)
 {
 	if ((arg->ui & TAGMASK) == selmon->tagset[selmon->seltags])
 		return;
@@ -2323,16 +2123,14 @@ view(const Arg *arg)
 	printstatus();
 }
 
-void
-virtualkeyboard(struct wl_listener *listener, void *data)
+void virtualkeyboard(struct wl_listener *listener, void *data)
 {
 	struct wlr_virtual_keyboard_v1 *keyboard = data;
 	struct wlr_input_device *device = &keyboard->input_device;
 	createkeyboard(device);
 }
 
-Client *
-xytoclient(double x, double y)
+Client *xytoclient(double x, double y)
 {
 	/* Find the topmost visible client (if any) at point (x, y), including
 	 * borders. This relies on stack being ordered from top to bottom. */
@@ -2343,9 +2141,8 @@ xytoclient(double x, double y)
 	return NULL;
 }
 
-struct wlr_surface *
-xytolayersurface(struct wl_list *layer_surfaces, double x, double y,
-		double *sx, double *sy)
+struct wlr_surface *xytolayersurface(struct wl_list *layer_surfaces,
+    double x, double y, double *sx, double *sy)
 {
 	LayerSurface *layersurface;
 	wl_list_for_each_reverse(layersurface, layer_surfaces, link) {
@@ -2364,15 +2161,13 @@ xytolayersurface(struct wl_list *layer_surfaces, double x, double y,
 	return NULL;
 }
 
-Monitor *
-xytomon(double x, double y)
+Monitor *xytomon(double x, double y)
 {
 	struct wlr_output *o = wlr_output_layout_output_at(output_layout, x, y);
 	return o ? o->data : NULL;
 }
 
-void
-zoom(const Arg *arg)
+void zoom(const Arg *arg)
 {
 	Client *c, *sel = selclient();
 
@@ -2404,8 +2199,7 @@ zoom(const Arg *arg)
 }
 
 #ifdef XWAYLAND
-void
-activatex11(struct wl_listener *listener, void *data)
+void activatex11(struct wl_listener *listener, void *data)
 {
 	Client *c = wl_container_of(listener, c, activate);
 
@@ -2414,8 +2208,7 @@ activatex11(struct wl_listener *listener, void *data)
 		wlr_xwayland_surface_activate(c->surface.xwayland, 1);
 }
 
-void
-configurex11(struct wl_listener *listener, void *data)
+void configurex11(struct wl_listener *listener, void *data)
 {
 	Client *c = wl_container_of(listener, c, configure);
 	struct wlr_xwayland_surface_configure_event *event = data;
@@ -2423,8 +2216,7 @@ configurex11(struct wl_listener *listener, void *data)
 			event->x, event->y, event->width, event->height);
 }
 
-void
-createnotifyx11(struct wl_listener *listener, void *data)
+void createnotifyx11(struct wl_listener *listener, void *data)
 {
 	struct wlr_xwayland_surface *xwayland_surface = data;
 	Client *c;
@@ -2452,8 +2244,7 @@ createnotifyx11(struct wl_listener *listener, void *data)
 			fullscreennotify);
 }
 
-Atom
-getatom(xcb_connection_t *xc, const char *name)
+Atom getatom(xcb_connection_t *xc, const char *name)
 {
 	Atom atom = 0;
 	xcb_intern_atom_reply_t *reply;
@@ -2465,8 +2256,7 @@ getatom(xcb_connection_t *xc, const char *name)
 	return atom;
 }
 
-void
-renderindependents(struct wlr_output *output, struct timespec *now)
+void renderindependents(struct wlr_output *output, struct timespec *now)
 {
 	Client *c;
 	struct render_data rdata;
@@ -2490,8 +2280,7 @@ renderindependents(struct wlr_output *output, struct timespec *now)
 	}
 }
 
-void
-xwaylandready(struct wl_listener *listener, void *data)
+void xwaylandready(struct wl_listener *listener, void *data)
 {
 	struct wlr_xcursor *xcursor;
 	xcb_connection_t *xc = xcb_connect(xwayland->display_name, NULL);
@@ -2521,8 +2310,7 @@ xwaylandready(struct wl_listener *listener, void *data)
 	xcb_disconnect(xc);
 }
 
-Client *
-xytoindependent(double x, double y)
+Client *xytoindependent(double x, double y)
 {
 	/* Find the topmost visible independent at point (x, y).
 	 * For independents, the most recently created can be used as the "top".
@@ -2544,8 +2332,7 @@ xytoindependent(double x, double y)
 }
 #endif
 
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
 	char *startup_cmd = NULL;
 	int c;
